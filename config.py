@@ -3,12 +3,14 @@ __author__ = 'Joynice'
 import os
 import pymysql
 DEBUG = True
-SECRET_KEY = os.urandom(24)
+# SECRET_KEY = os.urandom(24)
+SECRET_KEY = 'dsadas1231d3sa'
 SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root@localhost:3306/bbs?charset=utf8'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 SQLALCHEMY_COMMIT_ON_TEARDOWN = True
 
 CMS_USER_ID = 'DSADSAD1551512'
+FRONT_USER_ID = 'DHDIUASHDIUSAUHDUIASHDUIASHDUI1541646DSADAS'
 
 # 发送者邮箱的服务器地址
 MAIL_SERVER = "smtp.qq.com"

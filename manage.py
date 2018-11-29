@@ -6,6 +6,7 @@ from main import create_app
 from exts import db
 from apps.cms import models as cms_models
 from apps.front import models as front_models
+from apps.models import BannerModel
 
 CMSUser = cms_models.CMSUser
 CMSRole = cms_models.CMSRole
@@ -71,13 +72,16 @@ def test_permission():
         print('这个角色有访问者权限！')
     else:
         print('这个角色没有访问者权限！')
+
+
 @manager.option('-t', '--telephone', dest='telephone')
-@manager.option('-u','--username', dest='username')
-@manager.option('-p','--password',dest='password')
+@manager.option('-u', '--username', dest='username')
+@manager.option('-p', '--password', dest='password')
 def create_front_user(telephone, username, password):
     user = FrontUser(telephone=telephone, username=username, password=password)
     db.session.add(user)
     db.session.commit()
+
 
 if __name__ == '__main__':
     manager.run()

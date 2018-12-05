@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 __author__ = 'Joynice'
-from wtforms import  StringField, IntegerField
+from wtforms import StringField, IntegerField
 from wtforms.validators import Email, InputRequired, Length, EqualTo, ValidationError
 from ..forms import BaseForm
 from utils import zlcache
@@ -47,3 +47,10 @@ class AddBannerForm(BaseForm):
 class UpdateBannerForm(AddBannerForm):
     banner_id = IntegerField(validators=[InputRequired(message='请输入轮播图id')])
 
+
+class AddBoardForm(BaseForm):
+    name = StringField(validators=[InputRequired(message='请输入版块名称')])
+
+
+class UpdateBoardForm(AddBoardForm):
+    board_id = IntegerField(validators=[InputRequired(message='请输入模板id')])

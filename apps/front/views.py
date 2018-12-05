@@ -1,23 +1,111 @@
 # -*- coding: UTF-8 -*-
 __author__ = 'Joynice'
-from flask import Blueprint, views, render_template, request, session, url_for
+from flask import Blueprint, views, render_template, request, session, url_for, g, abort
 import config
-from .forms import SignupForm, SigninForm
+from .forms import SignupForm, SigninForm, AddPostForm, AddCommentForm
 from utils import restful, safeutils
 from .models import FrontUser
-from ..models import BannerModel
+from ..models import BannerModel, BoardModel, PostModel, CommonModel, HighlightPostModle
 from exts import db
+from .decorators import login_required
+from flask_paginate import Pagination, get_page_parameter
+from sqlalchemy.sql import func
 
 bp = Blueprint("front", __name__)
 
 
 @bp.route('/')
 def index():
+    board_id = request.args.get('bd', type=int, default=None)
     banners = BannerModel.query.order_by(BannerModel.priority.desc()).limit(4)
+    boards = BoardModel.query.all()
+    page = request.args.get(get_page_parameter(), type=int, default=1)
+    start = (page - 1) * config.EVERY_COUNT
+    end = start + config.EVERY_COUNT
+    posts = None
+    total = 0
+    query_obj = None
+    sort = request.args.get('st', type=int, default=1)
+    if sort == 1:
+        query_obj = PostModel.query.order_by(PostModel.create_time.desc())
+    elif sort == 2:
+        query_obj = db.session.query(PostModel).outerjoin(HighlightPostModle).order_by(
+            HighlightPostModle.create_time.desc(), PostModel.create_time.desc())
+    elif sort == 3:
+        query_obj = PostModel.query.order_by(PostModel.create_time.desc())
+    elif sort == 4:
+        query_obj = db.session.query(PostModel).outerjoin(CommonModel).group_by(PostModel.id).order_by(
+            func.count(CommonModel.id).desc(), PostModel.create_time.desc())
+    if board_id:
+        query_obj = query_obj.filter(PostModel.board_id == board_id)
+        posts = query_obj.slice(start, end)
+        total = query_obj.count()
+    else:
+        posts = query_obj.slice(start, end)
+        total = query_obj.count()
+    pagination = Pagination(bs_version=3, page=page, total=total, outer_window=1, inner_window=1)
     context = {
-        'banners': banners
+        'banners': banners,
+        'boards': boards,
+        'posts': posts,
+        'pagination': pagination,
+        'current_board': board_id,
+        'current_sort': sort
     }
     return render_template('front/front_index.html', **context)
+
+
+@bp.route('/p/<post_id>/')
+def post_detail(post_id):
+    post = PostModel.query.get(post_id)
+    if not post:
+        abort(404)
+    return render_template('front/front_pdetail.html', post=post)
+
+
+@bp.route('/acomment/', methods=['POST'])
+@login_required
+def add_comment():
+    form = AddCommentForm(request.form)
+    if form.validate():
+        content = form.content.data
+        post_id = form.post_id.data
+        post = PostModel.query.get(post_id)
+        if not post:
+            return restful.params_error(message='没有找到该帖子')
+        comment = CommonModel(content=content)
+        comment.post = post
+        comment.commoner = g.front_user
+        db.session.add(comment)
+        db.session.commit()
+        return restful.success()
+    else:
+        return restful.params_error(form.get_error())
+
+
+@bp.route('/apost/', methods=['GET', 'POST'])
+@login_required
+def apost():
+    if request.method == 'GET':
+        boards = BoardModel.query.all()
+        return render_template('front/front_apost.html', boards=boards)
+    else:
+        form = AddPostForm(request.form)
+        if form.validate():
+            title = form.title.data
+            content = form.content.data
+            board_id = form.board_id.data
+            board = BoardModel.query.get(board_id)
+            if not board:
+                return restful.params_error(message='没有该版块')
+            post = PostModel(title=title, content=content)
+            post.board = board
+            post.author = g.front_user
+            db.session.add(post)
+            db.session.commit()
+            return restful.success()
+        else:
+            return restful.params_error(message=form.get_error())
 
 
 class SignupView(views.MethodView):

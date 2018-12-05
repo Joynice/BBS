@@ -1,23 +1,10 @@
-# -*- coding: UTF-8 -*-
-__author__ = 'Joynice'
-import top.api
+# -*- coding: UTF-8 -*-、
+"""
+celery 启动命令:celery -A tasks.celery worker --pool=eventlet， 启动时保证与tasks.py同级
+若出现 'AttributeError: 'float' object has no attribute 'items'错误，这是redis包版本不兼容，退回2.10.6版本即可。
+pip install redis==2.10.6
+"""
 
-app_key = 'LTAIGEGh0PMlgqX3'
-app_secret = 'eWiD8gVU2W0Qx5eBc5JU45qbHoO0bi'
-req = top.setDefaultAppInfo(app_key,app_secret)
-req = top.api.AlibabaAliqinFcSmsNumSendRequest()
-req.extend = ""
-req.sms_type = 'normal'
-req.sms_free_sign_name = '知了课堂论坛'
-# 给模版的参数
-telphone_captcha = 123456
-telphone = 15225090724
-req.sms_param = "{code:'%s'}" % telphone_captcha
-req.rec_num = telphone
-req.sms_template_code = 'SMS_149385941'
-
-resp = req.getResponse()
-print(resp)
 
 
 

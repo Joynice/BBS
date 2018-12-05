@@ -1,15 +1,18 @@
 # -*- coding: UTF-8 -*-
 from flask import Blueprint, views, render_template, request, session, redirect, url_for, g
 from flask_mail import Message
-from .forms import LoginForm, ResetpwdForm, ResetEmailForm, AddBannerForm, UpdateBannerForm
+from .forms import LoginForm, ResetpwdForm, ResetEmailForm, AddBannerForm, UpdateBannerForm, AddBoardForm, \
+    UpdateBoardForm
 from .models import CMSUser, CMSPersmission
-from ..models import BannerModel
+from ..models import BannerModel, BoardModel, HighlightPostModle, PostModel
 from .decorators import login_required, permission_required
 import config
 from exts import db, mail
 from utils import restful, zlcache
 import string
 import random
+from flask_paginate import Pagination, get_page_parameter
+from tasks import send_mail
 
 bp = Blueprint("cms", __name__, url_prefix='/cms')
 
@@ -43,11 +46,12 @@ def email_captcha():
     source = list(string.ascii_letters)
     source.extend(map(lambda x: str(x), range(0, 10)))
     captcha = "".join(random.sample(source, 6))
-    message = Message('BBS论坛邮箱验证码', recipients=[email], body='您的验证码是：{}'.format(captcha))
-    try:
-        mail.send(message)
-    except Exception as e:
-        return restful.server_error(message=e)
+    # message = Message('BBS论坛邮箱验证码', recipients=[email], body='您的验证码是：{}'.format(captcha))
+    send_mail.delay('BBS论坛邮箱验证码', [email], '您的验证码是：{}'.format(captcha))
+    # try:
+    #     mail.send(message)
+    # except Exception as e:
+    #     return restful.server_error(message=e)
     zlcache.set(email, captcha)
     return restful.success()
 
@@ -56,7 +60,68 @@ def email_captcha():
 @login_required
 @permission_required(CMSPersmission.POSTER)
 def posts():
-    return render_template('cms/cms_posts.html')
+    page = request.args.get(get_page_parameter(), type=int, default=1)
+    start = (page-1) * config.BACK_COUNT
+    end = start + config.BACK_COUNT
+    posts = None
+    total = 0
+    query_obj = PostModel.query
+    posts = query_obj.slice(start, end)
+    total = query_obj.count()
+    pagination = Pagination(bs_version=3, page=page, total=total, outer_window=1, inner_window=1)
+    context = {
+        'posts': posts,
+        'pagination': pagination
+    }
+    return render_template('cms/cms_posts.html', **context)
+
+
+@bp.route('/hpost/', methods=['POST'])
+@login_required
+@permission_required(CMSPersmission.POSTER)
+def hpost():
+    post_id = request.form.get('post_id')
+    if not post_id:
+        return restful.params_error(message='请传入帖子id')
+    post = PostModel.query.get(post_id)
+    if not post:
+        return restful.params_error(message='没有找到这篇帖子')
+    highlight = HighlightPostModle()
+    highlight.post = post
+    db.session.add(highlight)
+    db.session.commit()
+    return restful.success()
+
+
+@bp.route('/uhpost/', methods=['POST'])
+@login_required
+@permission_required(CMSPersmission.POSTER)
+def uhpost():
+    post_id = request.form.get('post_id')
+    if not post_id:
+        return restful.params_error(message='请传入帖子id')
+    post = PostModel.query.get(post_id)
+    if not post:
+        return restful.params_error(message='没有找到这篇帖子')
+    highlight = HighlightPostModle.query.filter_by(post_id=post_id).first()
+    db.session.delete(highlight)
+    db.session.commit()
+    return restful.success()
+
+
+@bp.route('/dpost/', methods=['POST'])
+@login_required
+@permission_required(CMSPersmission.POSTER)
+def dpost():
+    post_id = request.form.get('post_id')
+    if not post_id:
+        return restful.params_error(message='请传入帖子id')
+    post = PostModel.query.get(post_id)
+    if not post:
+        return restful.params_error(message='没有找到该篇帖子')
+    db.session.delete(post)
+    db.session.commit()
+    return restful.success()
 
 
 @bp.route('/comments/')
@@ -66,11 +131,64 @@ def comments():
     return render_template('cms/cms_comments.html')
 
 
+@bp.route('/aboard/', methods=['POST'])
+@permission_required(CMSPersmission.BOARDER)
+@login_required
+def aboard():
+    form = AddBoardForm(request.form)
+    if form.validate():
+        name = form.name.data
+        board = BoardModel(name=name)
+        db.session.add(board)
+        db.session.commit()
+        return restful.success(message='添加成功')
+    else:
+        return restful.params_error(message=form.get_error())
+
+
+@bp.route('/uboard/', methods=['POST'])
+@login_required
+@permission_required(CMSPersmission.BOARDER)
+def uboard():
+    form = UpdateBoardForm(request.form)
+    if form.validate():
+        board_id = form.board_id.data
+        name = form.name.data
+        board = BoardModel.query.get(board_id)
+        if board:
+            board.name = name
+            db.session.commit()
+            return restful.success(message='修改成功')
+        else:
+            return restful.params_error(message='没有找到该模块')
+    else:
+        return restful.params_error(form.get_error())
+
+
+@bp.route('/dboard/', methods=['POST'])
+@login_required
+@permission_required(CMSPersmission.BOARDER)
+def dboard():
+    board_id = request.form.get('board_id')
+    if not board_id:
+        return restful.params_error(message='请输入模块id')
+    board = BoardModel.query.get(board_id)
+    if not board:
+        return restful.params_error(message='没有改模板')
+    db.session.delete(board)
+    db.session.commit()
+    return restful.success(message='删除成功')
+
+
 @bp.route('/boards/')
 @login_required
 @permission_required(CMSPersmission.BOARDER)
 def boards():
-    return render_template('cms/cms_boards.html')
+    board_models = BoardModel.query.all()
+    context = {
+        'boards': board_models
+    }
+    return render_template('cms/cms_boards.html', **context)
 
 
 @bp.route('/fusers/')

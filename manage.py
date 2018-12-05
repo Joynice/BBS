@@ -6,7 +6,7 @@ from main import create_app
 from exts import db
 from apps.cms import models as cms_models
 from apps.front import models as front_models
-from apps.models import BannerModel
+from apps.models import BannerModel, BoardModel, PostModel
 
 CMSUser = cms_models.CMSUser
 CMSRole = cms_models.CMSRole
@@ -81,6 +81,21 @@ def create_front_user(telephone, username, password):
     user = FrontUser(telephone=telephone, username=username, password=password)
     db.session.add(user)
     db.session.commit()
+
+
+@manager.command
+def create_test_post():
+    for i in range(1, 205):
+        title = '标题{}'.format(i)
+        content = '内容:{}'.format(i)
+        board = BoardModel.query.first()
+        author = FrontUser.query.first()
+        post = PostModel(title=title, content=content)
+        post.board = board
+        post.author = author
+        db.session.add(post)
+        db.session.commit()
+    print('测试数据添加完成！')
 
 
 if __name__ == '__main__':
